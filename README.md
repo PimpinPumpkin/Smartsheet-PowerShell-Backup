@@ -29,31 +29,38 @@ At the top of the script, you will see a few parameters.You must set your API Ke
     $debug = $false  # Enable debug mode to display additional output
     $retentionMonths = 3  # Duration in months to keep downloaded files before deletion
 
-## Functions
+### Internal Functions
 
     verifySheetID: Checks if the sheet ID is provided. If not, an error is thrown.
     Ensure-FolderExists: Ensures the target directory exists; if not, it creates it.
     attachmentObjectFirstURL: Helper function to construct URLs for downloading attachments.
 
-## Get the details of a sheet
+### Get the details of a sheet
 
     Smartsheet -Action Get-Sheet -SheetID "2984863124639620"
 
-## Download a sheet
+### Download a sheet
     Smartsheet -Action Download-Sheet -SheetID "YOUR_SHEET_ID" -TargetDirectory $outputPath
 
-## Get the details of an attachment
+### Get the details of an attachment
     Smartsheet -Action Get-Attachment -SheetID "YOUR_SHEET_ID"
     
-## Download all attachments from a sheet
+### Download all attachments from a sheet
   Smartsheet -Action Download-Attachment -SheetID "YOUR_SHEET_ID" -TargetDirectory $outputPath
   
-## To list all sheets
+### To list all sheets
     Smartsheet -Action ListAll
 
-## To search for a sheet:
+### To search for a sheet:
     Smartsheet -Action SearchLocal -SearchQuery "Keystone"
 
 # Automated Folder Management
 
 The script includes functionality to manage folders based on the date and cleans up older backups based on the retention period set by the user. This is particularly useful for maintaining a clean and manageable file system. By default, the automatic folder management is turned off. 
+
+Backup folder topography to be generated:
+    Main target folder (whatever is chosen by the user)
+        -Folder "current date" e.g. 2024-04-25
+            -Folder named after sheet
+                -Sheet itself
+                -Sheet attachment folder (if applicable)
