@@ -56,4 +56,4 @@ At the top of the script, you will see a few parameters.You must set your API Ke
 
 # Automated Folder Management
 
-The script includes functionality to manage folders based on the date and cleans up older backups based on the retention period set by the user. This is particularly useful for maintaining a clean and manageable file system. By default, the script is set to delete backups older than three months. 
+The script includes functionality to manage folders based on the date and cleans up older backups based on the retention period set by the user. This is particularly useful for maintaining a clean and manageable file system. By default, the automatic folder management is turned off. 
