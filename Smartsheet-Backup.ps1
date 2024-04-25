@@ -216,14 +216,7 @@ function Smartsheet {
     }
 }
 
-
-#Smartsheet -Action ListAll
-#Smartsheet -Action SearchLocal -SearchQuery "Keystone"
-#Smartsheet -Action Download-Sheet -SheetID "2984863124639620" -TargetDirectory $outputPath
-Smartsheet -Action Get-Sheet -SheetID "2984863124639620"
-#Smartsheet -Action Download-Attachment -SheetID "2984863124639620" -TargetDirectory $outputPath
-#Smartsheet -Action Get-Attachment -SheetID "2984863124639620"
-
+#This portion is what actually downloads everything
 if ($noDownload -eq $false) {
 
     #Get the current date and format it for folder titles
