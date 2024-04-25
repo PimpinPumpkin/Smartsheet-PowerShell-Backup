@@ -6,6 +6,7 @@ $outputPath = "YOUR OUTPUT DIRECTORY HERE"
 $noDownload = $true
 $debug = $false
 $retentionMonths = 3
+$throttleLimit = 1
 
 function verifySheetID {
     param(
@@ -188,7 +189,7 @@ function Smartsheet {
                         Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
                         Write-Host "Downloaded $($currentAttachment.Name)"
 
-                    } -ThrottleLimit 10
+                    } -ThrottleLimit $throttleLimit
                 }
                 catch {
                     Write-Error "Failed to download attachments: $($_.Exception.Message)"
@@ -256,8 +257,13 @@ if ($noDownload -eq $false) {
             $sheetAttachmentFolder = Join-Path -Path $sheetDownloadFolderPath -ChildPath "$($currentOperator.name)_attachments"
             Ensure-FolderExists -FolderPath $sheetAttachmentFolder
 
-            #Download the attachments to the target folder
-            Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder
+            try {
+                #Download the attachments to the target folder
+                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder #2>> "$outputPath/errors.txt"
+            }
+            catch {
+                Write-Error "Issue detected: $_"
+            }
         }
     }
 
