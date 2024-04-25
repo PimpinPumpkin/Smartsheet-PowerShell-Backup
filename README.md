@@ -18,7 +18,7 @@ Prerequisites
     An active Smartsheet account with API access
 
 # Configuration
-At the top of the script, you will see a few parameters.You must set your API Key and Output Directory.
+At the top of the script, you will see a few parameters. You must set your API Key and Output Directory.
 
     $apiToken = "YOUR API KEY"  # Replace with your Smartsheet API key
     $outputPath = "YOUR OUTPUT DIRECTORY"  # Path where sheets and attachments will be stored
