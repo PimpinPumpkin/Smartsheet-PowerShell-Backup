@@ -3,7 +3,7 @@ $apiToken = "YOUR TOKEN HERE"
 $outputPath = "YOUR OUTPUT DIRECTORY HERE"
 
 #Set this to true if you don't want any of the folders/downloads to run
-$noDownload = $false
+$noDownload = $true
 $debug = $false
 $retentionMonths = 3
 
@@ -261,7 +261,7 @@ if ($noDownload -eq $false) {
         }
     }
 
-    #Clean up backups older than x months (Acronis backups will have older versions)
+    #Clean up backups older than x months
 
     #Get the current date minus x months
     $timeAgo = (Get-Date).AddMonths(-$retentionMonths)
