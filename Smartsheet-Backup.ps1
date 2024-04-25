@@ -216,7 +216,7 @@ function Smartsheet {
     }
 }
 
-#This portion is what actually downloads everything
+#From here on out is the automatic backup portion! If you want to turn it on, you can set $noDownload to $false at the top of the script.
 if ($noDownload -eq $false) {
 
     #Get the current date and format it for folder titles
