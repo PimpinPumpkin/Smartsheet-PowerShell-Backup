@@ -1,5 +1,5 @@
 # Smartsheet-PowerShell-Backup
-A simple script to backup sheets and attachments from Smartsheet. This was created out of necessity for a work project, however, I decided to add a few more neat features to it and throw it online. 
+A simple script to backup sheets and attachments from Smartsheet. This was created out of necessity for a work project, however, I decided to add a few more neat features to it and throw it online. You may have stumbled across the old Java application for backing up Smartsheets, but alas, that hasn't been updated in almost six years - and it's not working right for us. Hence, this!
 
 This PowerShell script is designed to interact with the Smartsheet API, allowing users to list, download, and manage sheets and attachments based on various parameters. The script supports multiple actions like listing all sheets, downloading sheets, fetching sheet details, and managing attachments.
 
