@@ -52,9 +52,9 @@ At the top of the script, you will see a few parameters.You must set your API Ke
 
 The script includes functionality to manage folders based on the date and cleans up older backups based on the retention period set by the user. This is particularly useful for maintaining a clean and manageable file system. By default, the automatic folder management is turned off. 
 
-Backup folder topography to be generated:
-        Main target folder (whatever is chosen by the user)
-            -Folder "current date" e.g. 2024-04-25
-                -Folder named after sheet
-                    -Sheet itself
-                    -Sheet attachment folder (if applicable)
+#### Backup folder topography to be generated:
+    Main target folder (whatever is chosen by the user)
+        -Folder "current date" e.g. 2024-04-25
+            -Folder SheetName
+                -Sheet itself
+                -SheetName_attachments folder (if applicable)
