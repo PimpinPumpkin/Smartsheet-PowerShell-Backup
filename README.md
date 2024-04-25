@@ -14,7 +14,7 @@ This PowerShell script is designed to interact with the Smartsheet API, allowing
 Getting Started
 Prerequisites
 
-    PowerShell 5.1 or higher
+    PowerShell 7.0 or higher
     An active Smartsheet account with API access
 
 # Configuration
