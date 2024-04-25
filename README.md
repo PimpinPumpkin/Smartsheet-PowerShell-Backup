@@ -29,12 +29,6 @@ At the top of the script, you will see a few parameters.You must set your API Ke
     $debug = $false  # Enable debug mode to display additional output
     $retentionMonths = 3  # Duration in months to keep downloaded files before deletion
 
-### Internal Functions
-
-    verifySheetID: Checks if the sheet ID is provided. If not, an error is thrown.
-    Ensure-FolderExists: Ensures the target directory exists; if not, it creates it.
-    attachmentObjectFirstURL: Helper function to construct URLs for downloading attachments.
-
 ### Get the details of a sheet
 
     Smartsheet -Action Get-Sheet -SheetID "2984863124639620"
@@ -46,7 +40,7 @@ At the top of the script, you will see a few parameters.You must set your API Ke
     Smartsheet -Action Get-Attachment -SheetID "YOUR_SHEET_ID"
     
 ### Download all attachments from a sheet
-  Smartsheet -Action Download-Attachment -SheetID "YOUR_SHEET_ID" -TargetDirectory $outputPath
+    Smartsheet -Action Download-Attachment -SheetID "YOUR_SHEET_ID" -TargetDirectory $outputPath
   
 ### To list all sheets
     Smartsheet -Action ListAll
