@@ -23,7 +23,7 @@ At the top of the script, you will see a few parameters.You must set your API Ke
     $apiToken = "YOUR API KEY"  # Replace with your Smartsheet API key
     $outputPath = "YOUR OUTPUT DIRECTORY"  # Path where sheets and attachments will be stored
 
-## Optional Settings: You can adjust the script behavior using these optional settings.
+### Optional Settings: You can adjust the script behavior using these optional settings.
 
     $noDownload = $false  # Set to $true to disable downloading. See "Automated Folder Management" for more information.
     $debug = $false  # Enable debug mode to display additional output
