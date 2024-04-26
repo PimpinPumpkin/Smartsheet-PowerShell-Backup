@@ -1,3 +1,6 @@
+#Version 0.2
+#Copyright Pimpinpumpkin 2024
+
 #Set your variables
 $apiToken = "YOUR TOKEN HERE"
 $outputPath = "YOUR OUTPUT DIRECTORY HERE"
@@ -6,7 +9,16 @@ $outputPath = "YOUR OUTPUT DIRECTORY HERE"
 $noDownload = $true
 $debug = $false
 $retentionMonths = 3
-$throttleLimit = 1
+$throttleLimit = 6
+
+#Create log file path
+$logFile = Join-Path -Path $outputPath -ChildPath "Smartsheet-Log-$(Get-Date -Format "yyyy-MM-dd").txt"
+
+# Function to log
+function logToFile {
+    param([string]$message)
+    Add-Content -Path $logFile -Value $message
+}
 
 function verifySheetID {
     param(
@@ -82,13 +94,14 @@ function Smartsheet {
         ####
     )
 
+    #Confirm we have an API token
     if (-not $apiToken) {
         Write-Error "API token is not set. Please configure your Smartsheet API token in the environment variables."
         return
     }
 
+    #Build headers
     $baseUri = "https://api.smartsheet.com/2.0/sheets"
-    #$basedUri = "https://api.smartsheet.com/2.0/sheets/?includeAll=true"
     $headers = @{
         "Authorization" = "Bearer $apiToken"
     }
@@ -159,14 +172,25 @@ function Smartsheet {
                 }
                 $theQuery.data | Where-Object { $_.name -match $SearchQuery }
             }
-            "Download-Attachment" {       
+            "Download-Attachment" {
                 verifySheetID -SheetID $SheetID -errorText "SheetID is required to download attachments from a sheet."
                 try {
                     #Grab an object containing the first stage URLs and file names
                     $urlsFirstStage = attachmentObjectFirstURL -listOfAttachments $theQuery -parentSheetID $SheetID
             
-                    #Iterate over each attachment in parallel
-                    $urlsFirstStage | ForEach-Object -Parallel {
+                    # Initialize a HashSet to track files that are being downloaded
+                    $downloadTracker = [System.Collections.Generic.HashSet[string]]::new()
+            
+                    # Filter out duplicate file names before entering the parallel block
+                    $uniqueAttachments = $urlsFirstStage | Where-Object {
+                        $fileName = Join-Path -Path $TargetDirectory -ChildPath $_.Name
+                        # Attempt to add file name to the HashSet, returns false if already present
+                        $added = $downloadTracker.Add($fileName)
+                        return $added
+                    }
+            
+                    # Iterate over each unique attachment in parallel
+                    $uniqueAttachments | ForEach-Object -Parallel {
                         $currentAttachment = $_
                         $fileName = Join-Path -Path $using:TargetDirectory -ChildPath $currentAttachment.Name
                         $downloadUri = $currentAttachment.AttachmentFirstURL
@@ -175,26 +199,28 @@ function Smartsheet {
                         if ($debug) {
                             Write-Host "First stage URL: $downloadUri"
                         }
-
-                        #Get the new URLs by navigating from the urlsFirstStage object URLs 
+            
+                        # Get the new URLs by navigating from the urlsFirstStage object URLs 
                         $attachmentNewURLS = Invoke-RestMethod -Uri $downloadUri -Method Get -Headers $using:headers
-
-                        #Actually download the new files from the final stage URLs (parallel processing speeds this up considerably)
+            
+                        # Print current item
                         Write-Host "Preparing to download $($currentAttachment.Name)"
-
-                        #Debug information
+            
+                        # Debug information
                         if ($debug) {
                             Write-Host "Last stage URL: $($attachmentNewURLS.url)"
                         }
-                        Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
+                        # Actually download the new files from the final stage URLs
+                        Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName 2>> ~/Downloads/errors.txt
                         Write-Host "Downloaded $($currentAttachment.Name)"
-
+            
                     } -ThrottleLimit $throttleLimit
                 }
                 catch {
                     Write-Error "Failed to download attachments: $($_.Exception.Message)"
                 }
             }
+            
             
             "Get-Attachment" {
                 #Verify the sheet ID is provided; if not, the script will error out and stop execution.
@@ -239,15 +265,23 @@ if ($noDownload -eq $false) {
         #Brief directory topography to be generated:
         #Main target folder (whatever is predefined)
         #..Folder named current date
+        #...Workspace (New)
         #....Sheetname folder
         #......Sheet itself
         #......Sheet_attachments folder
 
-        #Build folder named current date
-        $sheetDownloadFolderPath = Join-Path -Path (Join-Path -Path $outputPath -ChildPath $currentDate) -ChildPath $currentOperator.name
+
+        # Query to get the workspace for the current sheet
+        $workspaceName = (Smartsheet -Action Get-Sheet -SheetID $currentOperator.id).workspace.name
+
+        # Add the workspace property to the current operator object only
+        $currentOperator | Add-Member -MemberType NoteProperty -Name workspace -Value $workspaceName -Force
+        
+        #Build folder named current date with workspaces under it
+        $sheetDownloadFolderPath = Join-Path -Path $outputPath -ChildPath $currentDate -AdditionalChildPath $workspaceName, $currentOperator.name
         Ensure-FolderExists -FolderPath $sheetDownloadFolderPath
 
-        #Download each sheet to the new timestamped folder
+        #Download each sheet to the workspace folder under the new timestamped folder
         Smartsheet -Action Download-Sheet -SheetID $currentOperator.id -TargetDirectory $sheetDownloadFolderPath
 
         #Check if we have attachments for a sheet, and download them if so
