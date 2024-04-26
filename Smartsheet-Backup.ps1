@@ -293,7 +293,7 @@ if ($noDownload -eq $false) {
 
             try {
                 #Download the attachments to the target folder
-                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder #2>> "$outputPath/errors.txt"
+                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder
             }
             catch {
                 Write-Error "Issue detected: $_"
