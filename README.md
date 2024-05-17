@@ -3,6 +3,8 @@ A simple script to backup sheets and attachments from Smartsheet. This was creat
 
 This PowerShell script is designed to interact with the Smartsheet API, allowing users to list, download, and manage sheets and attachments based on various parameters. The script supports multiple actions like listing all sheets, downloading sheets, fetching sheet details, and managing attachments.
 
+#Note: For enterprise use, I have a custom proprietary version with advanced monitoring and reporting available. Please contact me directly if this is of interest.
+
 ## Features
 
     List all sheets: Retrieve a summary list of all sheets available.
