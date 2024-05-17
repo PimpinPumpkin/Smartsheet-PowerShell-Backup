@@ -1,4 +1,4 @@
-#Version 0.2
+#Version 0.3
 #Copyright Pimpinpumpkin 2024
 
 #Set your variables
@@ -9,16 +9,14 @@ $outputPath = "YOUR OUTPUT DIRECTORY HERE"
 $noDownload = $true
 $debug = $false
 $retentionMonths = 3
-$throttleLimit = 6
+$throttleLimit = 10
+
+
+#Create an empty hashtable for any and all errors
+$myErrors = @()
 
 #Create log file path
 $logFile = Join-Path -Path $outputPath -ChildPath "Smartsheet-Log-$(Get-Date -Format "yyyy-MM-dd").txt"
-
-# Function to log
-function logToFile {
-    param([string]$message)
-    Add-Content -Path $logFile -Value $message
-}
 
 function verifySheetID {
     param(
@@ -26,12 +24,14 @@ function verifySheetID {
         [string]$errorText
     )
     if (-not $SheetID) {
-        Write-Error $errorText
+        $theError = "Error: $errorText"
+        Write-Error $theError
+        $myErrors += $theError
         exit
     }
 }
 
-function Ensure-FolderExists {
+function Set-FolderExists {
     param (
         [Parameter(Mandatory = $true)]
         [string]$FolderPath
@@ -51,10 +51,11 @@ function Ensure-FolderExists {
 function attachmentObjectFirstURL {
     param (
         [object]$listOfAttachments,
-        [string]$parentSheetID  #Add parameter for sheetURL
+        [string]$parentSheetID 
     )
 
     $attachmentList = @()
+    #return $listOfAttachments.data
     foreach ($attachment in $listOfAttachments.data) {
         $attachmentList += [PSCustomObject]@{
             ID                 = $attachment.id
@@ -66,6 +67,9 @@ function attachmentObjectFirstURL {
     }
     return $attachmentList
 }
+
+#Start logging
+Start-Transcript -Path $logFile -Append
 
 function Smartsheet {
     [CmdletBinding(DefaultParameterSetName = 'Default')]
@@ -96,12 +100,15 @@ function Smartsheet {
 
     #Confirm we have an API token
     if (-not $apiToken) {
-        Write-Error "API token is not set. Please configure your Smartsheet API token in the environment variables."
+        $theError = "Error: API token is not set. Please configure your Smartsheet API token in the environment variables."
+        Write-Error $theError
+        $myErrors += $theError
         return
     }
 
     #Build headers
     $baseUri = "https://api.smartsheet.com/2.0/sheets"
+    #$basedUri = "https://api.smartsheet.com/2.0/sheets/?includeAll=true"
     $headers = @{
         "Authorization" = "Bearer $apiToken"
     }
@@ -158,7 +165,9 @@ function Smartsheet {
                     Write-Host "Downloaded sheet $sheetName saved to $TargetDirectory"
                 }
                 else {
-                    Write-Error "Failed to obtain the sheet name from the API theQuery. Make sure the sheet actually exists!"
+                    $theError = "Error: Failed to obtain the sheet name from the API theQuery. Make sure the sheet actually exists!"
+                    Write-Error $theError
+                    $myErrors += $theError
                 }
             }
             Get-Sheet {
@@ -172,55 +181,96 @@ function Smartsheet {
                 }
                 $theQuery.data | Where-Object { $_.name -match $SearchQuery }
             }
-            "Download-Attachment" {
+            "Download-Attachment" {       
                 verifySheetID -SheetID $SheetID -errorText "SheetID is required to download attachments from a sheet."
                 try {
                     #Grab an object containing the first stage URLs and file names
                     $urlsFirstStage = attachmentObjectFirstURL -listOfAttachments $theQuery -parentSheetID $SheetID
             
-                    # Initialize a HashSet to track files that are being downloaded
-                    $downloadTracker = [System.Collections.Generic.HashSet[string]]::new()
-            
-                    # Filter out duplicate file names before entering the parallel block
-                    $uniqueAttachments = $urlsFirstStage | Where-Object {
-                        $fileName = Join-Path -Path $TargetDirectory -ChildPath $_.Name
-                        # Attempt to add file name to the HashSet, returns false if already present
-                        $added = $downloadTracker.Add($fileName)
-                        return $added
-                    }
-            
-                    # Iterate over each unique attachment in parallel
-                    $uniqueAttachments | ForEach-Object -Parallel {
+                    #Iterate over each attachment in parallel
+                    $urlsFirstStage | ForEach-Object -Parallel {
                         $currentAttachment = $_
                         $fileName = Join-Path -Path $using:TargetDirectory -ChildPath $currentAttachment.Name
                         $downloadUri = $currentAttachment.AttachmentFirstURL
-                        
+                        $theFileError = $false
+
                         #Debug information
                         if ($debug) {
                             Write-Host "First stage URL: $downloadUri"
                         }
-            
-                        # Get the new URLs by navigating from the urlsFirstStage object URLs 
-                        $attachmentNewURLS = Invoke-RestMethod -Uri $downloadUri -Method Get -Headers $using:headers
-            
-                        # Print current item
-                        Write-Host "Preparing to download $($currentAttachment.Name)"
-            
-                        # Debug information
-                        if ($debug) {
-                            Write-Host "Last stage URL: $($attachmentNewURLS.url)"
+
+                        #Wrap the last URLs call in a try block (not the prettiest thing but it works)...
+                        try {
+                            #Get the new URLs by navigating from the urlsFirstStage object URLs 
+                            $attachmentNewURLS = Invoke-RestMethod -Uri $downloadUri -Method Get -Headers $using:headers
+                            $theFileError = $false
+                        } 
+                        catch {
+                            #Retry 1
+                            Write-Host "Last URL download for $($currentAttachment.Name) failed, retrying after 3 seconds"
+                            #...if there's an error, let's take a rest. Note, this only affects the current thread, but if more errors pile up, each subsequent failing thread run into the same throttle loop
+                            Start-Sleep -Seconds 3
+                            try {
+                                #Try again
+                                $attachmentNewURLS = Invoke-RestMethod -Uri $downloadUri -Method Get -Headers $using:headers
+                            }
+                            catch {
+                                #Retry 2
+                                Write-Host "Last URL download for $($currentAttachment.Name) failed, retrying after 6 seconds"
+                                #If it fails after a 3 second break, let's rest for a little longer
+                                Start-Sleep -Seconds 6
+                                try {
+                                    #Try again
+                                    $attachmentNewURLS = Invoke-RestMethod -Uri $downloadUri -Method Get -Headers $using:headers
+                                }
+                                catch {
+                                    #Give up
+                                    Write-Host "Last URL download for $($currentAttachment.Name) failed, giving up"
+                                    #Ok now we can blow up and throw an error
+                                    $theError = "Error: Failed to download attachments: $($_.Exception.Message)"
+                                    Write-Error $theError
+                                    $myErrors += $theError
+                                    $theFileError = $true
+                                }
+                            }
                         }
-                        # Actually download the new files from the final stage URLs
-                        Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName 2>> ~/Downloads/errors.txt
-                        Write-Host "Downloaded $($currentAttachment.Name)"
-            
+                        
+                        #Debug information
+                        if ($debug) {
+                            try {
+                                Write-Host "Last stage URL: $($attachmentNewURLS.url)"
+                            }
+                            catch {
+                                $theError = "Error: Error getting last stage URL"
+                                Write-Error $theError
+                                $myErrors += $theError
+                            }
+                        }
+
+                        #Conditional logic here to make it only try and print/download from the second stage URL if we have it
+                        if ($theFileError -eq $false) {
+                            #Actually download the new files from the final stage URLs (parallel processing speeds this up considerably)
+                            if ($debug) {
+                                Write-Host "Preparing to download $($currentAttachment.Name)"
+                            }
+
+                            Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
+                            Write-Host "Downloaded $($currentAttachment.Name)"
+                        }
+                        elseif ($theFileError -eq $true) {
+                            $theError = "Error: Some issue with the second stage URLs not working right."
+                            Write-Error $theError
+                            $myErrors += $theError
+                        }
+
                     } -ThrottleLimit $throttleLimit
                 }
                 catch {
-                    Write-Error "Failed to download attachments: $($_.Exception.Message)"
+                    $theError = "Error: Failed to download attachments: $($_.Exception.Message)"
+                    Write-Error $theError
+                    $myErrors += $theError
                 }
             }
-            
             
             "Get-Attachment" {
                 #Verify the sheet ID is provided; if not, the script will error out and stop execution.
@@ -239,7 +289,9 @@ function Smartsheet {
         }
     }
     catch {
-        Write-Error "Failed to process the request: $($_.Exception.Message)"
+        $theError = "Error: Failed to process the request: $($_.Exception.Message)"
+        Write-Error $theError
+        $myErrors += $theError
     }
 }
 
@@ -253,7 +305,7 @@ if ($noDownload -eq $false) {
     $newFolderPath = Join-Path -Path $outputPath -ChildPath $currentDate
 
     #Check if the path exists, if not, create it
-    Ensure-FolderExists -FolderPath $newFolderPath
+    Set-FolderExists -FolderPath $newFolderPath
 
     #Grab a list of all sheets
     $allSheets = Smartsheet -Action ListAll
@@ -270,16 +322,15 @@ if ($noDownload -eq $false) {
         #......Sheet itself
         #......Sheet_attachments folder
 
-
-        # Query to get the workspace for the current sheet
+        #Query to get the workspace for the current sheet
         $workspaceName = (Smartsheet -Action Get-Sheet -SheetID $currentOperator.id).workspace.name
 
-        # Add the workspace property to the current operator object only
+        #Add the workspace property to the current operator object only
         $currentOperator | Add-Member -MemberType NoteProperty -Name workspace -Value $workspaceName -Force
         
         #Build folder named current date with workspaces under it
         $sheetDownloadFolderPath = Join-Path -Path $outputPath -ChildPath $currentDate -AdditionalChildPath $workspaceName, $currentOperator.name
-        Ensure-FolderExists -FolderPath $sheetDownloadFolderPath
+        Set-FolderExists -FolderPath $sheetDownloadFolderPath
 
         #Download each sheet to the workspace folder under the new timestamped folder
         Smartsheet -Action Download-Sheet -SheetID $currentOperator.id -TargetDirectory $sheetDownloadFolderPath
@@ -289,14 +340,15 @@ if ($noDownload -eq $false) {
         if ($doWeHaveAttachments -ge 1 ) {
             #Build sheet attachments folder
             $sheetAttachmentFolder = Join-Path -Path $sheetDownloadFolderPath -ChildPath "$($currentOperator.name)_attachments"
-            Ensure-FolderExists -FolderPath $sheetAttachmentFolder
+            Set-FolderExists -FolderPath $sheetAttachmentFolder
 
             try {
                 #Download the attachments to the target folder
-                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder
+                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder #2>> "$outputPath/errors.txt"
             }
             catch {
-                Write-Error "Issue detected: $_"
+                Write-Error "Error: Issue detected: $_"
+                $myErrors += "Error: Issue detected: $_"
             }
         }
     }
@@ -306,6 +358,9 @@ if ($noDownload -eq $false) {
     #Get the current date minus x months
     $timeAgo = (Get-Date).AddMonths(-$retentionMonths)
 
+    #Create holder array for folder dates
+    $myFolderDates = @()
+
     #Enumerate each folder in the directory
     Get-ChildItem -Path $outputPath -Directory | ForEach-Object {
         #Try to parse the folder name as a date
@@ -313,6 +368,9 @@ if ($noDownload -eq $false) {
         Write-Host "Found folder: $($_.Name)"
         try {
             $parsedDate = [DateTime]::ParseExact($folderDate, "yyyy-MM-dd", $null)
+
+            #Add to our array of dates
+            $myFolderDates += $parsedDate
 
             #If the parsed date is older than three months ago, delete the folder
             if ($parsedDate -lt $timeAgo) {
@@ -325,3 +383,7 @@ if ($noDownload -eq $false) {
         }
     }
 }
+
+Stop-Transcript
+
+
