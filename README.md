@@ -55,6 +55,7 @@ The script includes functionality to manage folders based on the date and cleans
 #### Backup folder topography to be generated:
     Main target folder (whatever is chosen by the user)
         -Folder "current date" e.g. 2024-04-25
-            -Folder SheetName
+           -Workspace (New)
+             -Folder SheetName
                 -Sheet itself
                 -SheetName_attachments folder (if applicable)
