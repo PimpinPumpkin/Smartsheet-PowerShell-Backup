@@ -1,4 +1,4 @@
-#Version 0.3
+#Version 0.4
 #Copyright Pimpinpumpkin 2024
 
 #Set your variables
@@ -17,6 +17,32 @@ $myErrors = @()
 
 #Create log file path
 $logFile = Join-Path -Path $outputPath -ChildPath "Smartsheet-Log-$(Get-Date -Format "yyyy-MM-dd").txt"
+
+function Set-LegalName {
+    param (
+        [string]$Name
+    )
+
+    #Define illegal characters for Windows filenames
+    $illegalCharsPattern = '[\\/:*?"<>|\x00-\x1F]'
+
+    #Check if the name contains any illegal characters
+    if ($Name -match $illegalCharsPattern) {
+        #Replace illegal characters with dashes
+        $sanitizedName = $Name -replace $illegalCharsPattern, '-'
+
+        #Output a message to the host indicating that illegal characters were found and replaced
+        Write-Host "Illegal characters were found and replaced: $sanitizedName"
+        Write-Host "Original name: $Name"
+    }
+    else {
+        #Output a message to the host indicating no illegal characters were found
+        Write-Host "File or folder name is legal: $Name"
+        $sanitizedName = $Name
+    }
+
+    return $sanitizedName
+}
 
 function verifySheetID {
     param(
@@ -55,7 +81,6 @@ function attachmentObjectFirstURL {
     )
 
     $attachmentList = @()
-    #return $listOfAttachments.data
     foreach ($attachment in $listOfAttachments.data) {
         $attachmentList += [PSCustomObject]@{
             ID                 = $attachment.id
@@ -149,6 +174,10 @@ function Smartsheet {
                 #Set the headers to add the xlsx mimeType
                 $headers["Accept"] = "application/vnd.ms-excel"
 
+                #Clean sheet names of illegal characters
+                $sheetName = Set-LegalName -Name $theQuery.name
+
+                #Append .xlsx extension
                 $sheetName = "$($theQuery.name).xlsx"
 
                 if ($sheetName) {
@@ -190,7 +219,8 @@ function Smartsheet {
                     #Iterate over each attachment in parallel
                     $urlsFirstStage | ForEach-Object -Parallel {
                         $currentAttachment = $_
-                        $fileName = Join-Path -Path $using:TargetDirectory -ChildPath $currentAttachment.Name
+                        $sanitizedAttachmentName = Set-LegalName -Name $currentAttachment.Name
+                        $fileName = Join-Path -Path $using:TargetDirectory -ChildPath $sanitizedAttachmentName
                         $downloadUri = $currentAttachment.AttachmentFirstURL
                         $theFileError = $false
 
@@ -207,7 +237,7 @@ function Smartsheet {
                         } 
                         catch {
                             #Retry 1
-                            Write-Host "Last URL download for $($currentAttachment.Name) failed, retrying after 3 seconds"
+                            Write-Host "Last URL download for $sanitizedAttachmentName failed, retrying after 3 seconds"
                             #...if there's an error, let's take a rest. Note, this only affects the current thread, but if more errors pile up, each subsequent failing thread run into the same throttle loop
                             Start-Sleep -Seconds 3
                             try {
@@ -216,7 +246,7 @@ function Smartsheet {
                             }
                             catch {
                                 #Retry 2
-                                Write-Host "Last URL download for $($currentAttachment.Name) failed, retrying after 6 seconds"
+                                Write-Host "Last URL download for $sanitizedAttachmentName failed, retrying after 6 seconds"
                                 #If it fails after a 3 second break, let's rest for a little longer
                                 Start-Sleep -Seconds 6
                                 try {
@@ -225,7 +255,7 @@ function Smartsheet {
                                 }
                                 catch {
                                     #Give up
-                                    Write-Host "Last URL download for $($currentAttachment.Name) failed, giving up"
+                                    Write-Host "Last URL download for $sanitizedAttachmentName failed, giving up"
                                     #Ok now we can blow up and throw an error
                                     $theError = "Error: Failed to download attachments: $($_.Exception.Message)"
                                     Write-Error $theError
@@ -251,11 +281,11 @@ function Smartsheet {
                         if ($theFileError -eq $false) {
                             #Actually download the new files from the final stage URLs (parallel processing speeds this up considerably)
                             if ($debug) {
-                                Write-Host "Preparing to download $($currentAttachment.Name)"
+                                Write-Host "Preparing to download $sanitizedAttachmentName"
                             }
 
                             Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
-                            Write-Host "Downloaded $($currentAttachment.Name)"
+                            Write-Host "Downloaded $sanitizedAttachmentName"
                         }
                         elseif ($theFileError -eq $true) {
                             $theError = "Error: Some issue with the second stage URLs not working right."
@@ -323,7 +353,10 @@ if ($noDownload -eq $false) {
         #......Sheet_attachments folder
 
         #Query to get the workspace for the current sheet
-        $workspaceName = (Smartsheet -Action Get-Sheet -SheetID $currentOperator.id).workspace.name
+        $uncleanWorkspaceName = (Smartsheet -Action Get-Sheet -SheetID $currentOperator.id).workspace.name
+
+        #Sanitize the workspace name
+        $workspaceName = Set-LegalName -Name $uncleanWorkspaceName
 
         #Add the workspace property to the current operator object only
         $currentOperator | Add-Member -MemberType NoteProperty -Name workspace -Value $workspaceName -Force
@@ -344,7 +377,7 @@ if ($noDownload -eq $false) {
 
             try {
                 #Download the attachments to the target folder
-                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder #2>> "$outputPath/errors.txt"
+                Smartsheet -Action Download-Attachment -SheetID $currentOperator.id -TargetDirectory $sheetAttachmentFolder
             }
             catch {
                 Write-Error "Error: Issue detected: $_"
@@ -379,7 +412,7 @@ if ($noDownload -eq $false) {
             }
         }
         catch {
-            Write-Host "Skipping: $folderDate is not in the 'yyyy-MM-dd' format or another error occurred."
+            Write-Host "Skipping: $folderDate is not in the 'yyyy-MM-dd' format."
         }
     }
 }
