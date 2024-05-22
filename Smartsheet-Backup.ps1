@@ -1,4 +1,4 @@
-#Version 0.4
+#Version 0.5
 #Copyright Pimpinpumpkin 2024
 
 #Set your variables
@@ -10,13 +10,40 @@ $noDownload = $true
 $debug = $false
 $retentionMonths = 3
 $throttleLimit = 10
-
+$theMinimumPSVersion = "7.4"
 
 #Create an empty hashtable for any and all errors
 $myErrors = @()
 
 #Create log file path
 $logFile = Join-Path -Path $outputPath -ChildPath "Smartsheet-Log-$(Get-Date -Format "yyyy-MM-dd").txt"
+
+function Get-PowerShellVersion {
+    try {
+        $requiredVersion = [Version]$theMinimumPSVersion
+        $currentVersion = $PSVersionTable.PSVersion
+
+        if ($currentVersion -lt $requiredVersion) {
+            #Write-Error "PowerShell $requiredVersion or higher is required. You are running $currentVersion."
+            return 0
+        } else {
+            Write-Host "Powershell version is equal to or greater than $theMinimumPSVersion"
+            return 1
+        }
+    } 
+    catch {
+        Write-Error "Error checking PowerShell version: $_"
+        return 0
+    }
+}
+
+$powershellVersionState = Get-PowerShellVersion
+
+#Make sure we're running a valid Powershell version
+if ($powershellVersionState -eq 0) {
+    Write-Error "Error: Powershell version is less than $theMinimumPSVersion"
+    exit
+}
 
 function Set-LegalName {
     param (
@@ -37,12 +64,14 @@ function Set-LegalName {
     }
     else {
         #Output a message to the host indicating no illegal characters were found
-        Write-Host "File or folder name is legal: $Name"
+        #Write-Host "File or folder name is legal: $Name"
         $sanitizedName = $Name
     }
-
     return $sanitizedName
 }
+
+#Define Set-LegalName as a string because Powershell sucks and we need it for calling inside of a multi-threaded Foreach-Object
+$psSucks = ${function:Set-LegalName}.ToString()
 
 function verifySheetID {
     param(
@@ -218,6 +247,8 @@ function Smartsheet {
             
                     #Iterate over each attachment in parallel
                     $urlsFirstStage | ForEach-Object -Parallel {
+                        #Grab Set-LegalName as a string because Powershell is a horrible language
+                        ${function:Set-LegalName} = $using:psSucks
                         $currentAttachment = $_
                         $sanitizedAttachmentName = Set-LegalName -Name $currentAttachment.Name
                         $fileName = Join-Path -Path $using:TargetDirectory -ChildPath $sanitizedAttachmentName
@@ -284,8 +315,12 @@ function Smartsheet {
                                 Write-Host "Preparing to download $sanitizedAttachmentName"
                             }
 
-                            Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
-                            Write-Host "Downloaded $sanitizedAttachmentName"
+                            try {
+                                Invoke-RestMethod -Uri $attachmentNewURLS.url -Method Get -OutFile $fileName
+                                Write-Host "Downloaded $sanitizedAttachmentName"
+                            } catch {
+                                #Who knows
+                            }
                         }
                         elseif ($theFileError -eq $true) {
                             $theError = "Error: Some issue with the second stage URLs not working right."
