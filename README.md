@@ -6,7 +6,7 @@ This PowerShell script is designed to interact with the Smartsheet API, allowing
 # Note: For enterprise use, I have a proprietary version with advanced monitoring and reporting available. Please contact me if this is of interest.
 
 ## Features
-
+    Tested on Windows/Linux. Untested on MacOS, but it should work.
     List all sheets: Retrieve a summary list of all sheets available.
     Download sheets: Download specific sheets by providing their unique ID.
     Get sheet details: Fetch detailed information about a specific sheet.
