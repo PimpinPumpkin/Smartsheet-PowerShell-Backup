@@ -51,22 +51,31 @@ function Set-LegalName {
     )
 
     #Define illegal characters for Windows filenames
-    $illegalCharsPattern = '[\\/:*?"<>|\x00-\x1F]'
+    $illegalCharsPattern = '[\\/:*?"<>|\x00-\x1F]+'
 
-    #Check if the name contains any illegal characters
-    if ($Name -match $illegalCharsPattern) {
-        #Replace illegal characters with dashes
-        $sanitizedName = $Name -replace $illegalCharsPattern, '-'
+    #Check for and replace illegal characters
+    $sanitizedName = $Name -replace $illegalCharsPattern, '-'
 
-        #Output a message to the host indicating that illegal characters were found and replaced
-        Write-Host "Illegal characters were found and replaced: $sanitizedName"
-        Write-Host "Original name: $Name"
+    #Remove leading and trailing whitespace
+    $sanitizedName = $sanitizedName.Trim()
+
+    #Remove leading and trailing periods
+    $sanitizedName = $sanitizedName -replace '^\.*|\.*$', ''
+
+    #Check for reserved names
+    $reservedNames = @("CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9")
+    if ($reservedNames -contains $sanitizedName.ToUpper()) {
+        $sanitizedName = "InvalidName-$sanitizedName"
     }
-    else {
-        #Output a message to the host indicating no illegal characters were found
-        #Write-Host "File or folder name is legal: $Name"
+
+    #Output changes for debugging
+    if ($sanitizedName -ne $Name) {
+        Write-Host "Illegal characters were found and replaced:`n$sanitizedName"
+        Write-Host "`nOriginal name:`n$Name"
+    } else {
         $sanitizedName = $Name
     }
+
     return $sanitizedName
 }
 
