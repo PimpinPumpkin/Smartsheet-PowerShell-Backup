@@ -3,7 +3,7 @@
 
 #Set your variables
 $apiToken = "YOUR TOKEN HERE"
-$outputPath = "YOUR OUTPUT DIRECTORY HERE"
+$outputPath = "YOUR OUTPUT DIRECTORY HERE (NTFS or POSIX path)"
 
 #Set this to true if you don't want any of the folders/downloads to run
 $noDownload = $true
